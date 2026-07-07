@@ -1,0 +1,7 @@
+{
+    "name":  "getcomics",
+    "version":  "1.0.0",
+    "description":  "Immediate DDL download source for single issues via GetComics (FlareSolverr-aware, Main DDL + PixelDrain)",
+    "type":  "module",
+    "private":  true
+}
