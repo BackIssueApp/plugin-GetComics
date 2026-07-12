@@ -36,6 +36,7 @@ async function downloadArchive(candidate, session, onProgress) {
       onProgress({ phase: 'download', unit: 'bytes', done: 0, total: candidate.size || 0, bps: 0, detail });
       const { buffer } = await downloadToBuffer(url, {
         referer: candidate.postUrl, session,
+        proxyUrl: config.getcomicsDownloadProxy || '',
         onProgress: ({ done, total, bps }) => onProgress({ phase: 'download', unit: 'bytes', done, total, bps, detail }),
       });
       if (suspiciouslySmall(buffer.length)) throw new Error('downloaded file is suspiciously small');

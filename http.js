@@ -4,14 +4,31 @@
 //      service that drives a real browser and returns cf_clearance cookies).
 //   2. Direct undici with realistic browser headers — works whenever Cloudflare
 //      isn't actively challenging; a detected challenge fails with a clear hint.
-// Downloads always go direct (undici streaming), carrying any cookies obtained.
-import { request, Agent, interceptors } from 'undici';
+// Downloads go direct (undici streaming), carrying any cookies obtained —
+// unless a download proxy is configured (see downloadDispatcher).
+import { request, Agent, ProxyAgent, interceptors } from 'undici';
 
 // Redirect following moved out of request()'s options in undici v7+ (passing
 // maxRedirections now throws "use the redirect interceptor"). Compose it onto a
 // shared dispatcher instead. The DDL "Download Now" link redirects to the real
 // file, and PixelDrain/host links redirect too, so we need this on downloads.
 const redirectDispatcher = new Agent().compose(interceptors.redirect({ maxRedirections: 5 }));
+
+// Some GetComics download hosts (the /dls/ redirector) block datacenter IPs
+// outright with a 403 — while the search/browse path is unaffected. An optional
+// egress proxy (e.g. a VPN container's HTTP proxy, http://gluetun:8888) routes
+// ONLY the file download out through a clean IP. One dispatcher per proxy URL,
+// cached; redirects still apply (the DDL link redirects to the real file).
+const proxyDispatchers = new Map();
+function downloadDispatcher(proxyUrl) {
+  if (!proxyUrl) return redirectDispatcher;
+  let d = proxyDispatchers.get(proxyUrl);
+  if (!d) {
+    d = new ProxyAgent(proxyUrl).compose(interceptors.redirect({ maxRedirections: 5 }));
+    proxyDispatchers.set(proxyUrl, d);
+  }
+  return d;
+}
 
 // A current, realistic desktop Firefox UA. When FlareSolverr solves a challenge
 // its cf_clearance cookie is bound to the UA it used, so we adopt whatever UA it
@@ -98,11 +115,11 @@ export async function fetchHtml(url, { flareUrl = '', session = {} } = {}) {
 // onProgress({ done, total, bps }) fires as bytes arrive (throttled), where
 // total is the content-length (0 if the server omits it) and bps is a smoothed
 // bytes/second.
-export async function downloadToBuffer(url, { referer = '', session = {}, maxBytes = 2 * 1024 * 1024 * 1024, onProgress = null } = {}) {
+export async function downloadToBuffer(url, { referer = '', session = {}, maxBytes = 2 * 1024 * 1024 * 1024, onProgress = null, proxyUrl = '' } = {}) {
   assertPublicUrl(url);
   const res = await request(url, {
     method: 'GET',
-    dispatcher: redirectDispatcher,
+    dispatcher: downloadDispatcher(proxyUrl),
     headers: {
       'user-agent': session.ua || DEFAULT_UA,
       accept: '*/*',

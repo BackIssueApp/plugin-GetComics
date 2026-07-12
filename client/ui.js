@@ -18,6 +18,8 @@
           '<label class="field"><span>Site URL</span><input id="set-getcomicsUrl" type="text" spellcheck="false" placeholder="https://getcomics.org"></label>' +
           '<label class="field"><span>FlareSolverr URL</span><input id="set-getcomicsFlaresolverrUrl" type="text" spellcheck="false" placeholder="http://flaresolverr:8191/v1"></label>' +
           '<p class="modal__note">GetComics sits behind Cloudflare. <b>FlareSolverr</b> (a small companion service you run — <code>ghcr.io/flaresolverr/flaresolverr</code>) solves the challenge; point this at its <code>/v1</code> endpoint. Leave blank to try a direct request, which works only when Cloudflare isn\'t actively challenging.</p>' +
+          '<label class="field"><span>Download proxy</span><input id="set-getcomicsDownloadProxy" type="text" spellcheck="false" placeholder="http://gluetun:8888"></label>' +
+          '<p class="modal__note">Optional, for the <b>file download</b> only. GetComics\' download host blocks some datacenter IPs with a 403 even though the site itself works. Point this at an HTTP proxy on a clean IP (e.g. a VPN container) to route just the download through it. Blank = download directly.</p>' +
           '<div class="client-test"><button id="getcomics-test" class="btn btn--ghost" type="button">Test connection</button><span id="getcomics-test-result" class="client-status" hidden></span></div>' +
           '<p class="modal__note">GetComics posts are often multi-issue packs; this source grabs single-issue matches for the download queue. Downloads use its own server, falling back to PixelDrain.</p>' +
         '</div>';

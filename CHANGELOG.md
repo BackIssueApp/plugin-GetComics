@@ -8,6 +8,16 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-07-12
+
+### Added
+- **Download proxy** (Settings → GetComics): optionally route the file download
+  through an HTTP proxy on a clean IP. The download host (`/dls/`) blocks some
+  datacenter IPs with a 403 even though the site itself works fine — pointing
+  this at a VPN container's HTTP proxy (e.g. `http://gluetun:8888`) gets the
+  download through. Only the download is proxied; search and browsing stay on
+  the direct connection.
+
 ## [1.0.0] — 2026-07-08
 
 Initial release: an immediate direct-download source for single issues.

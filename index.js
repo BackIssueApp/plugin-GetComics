@@ -24,6 +24,11 @@ export default function register(api) {
     // Optional FlareSolverr endpoint (e.g. http://flaresolverr:8191/v1) for
     // getting past Cloudflare. Blank = try direct.
     getcomicsFlaresolverrUrl: { type: 'string', allowEmpty: true },
+    // Optional egress proxy for the FILE DOWNLOAD only (e.g. a VPN container's
+    // HTTP proxy, http://gluetun:8888). GetComics' download host blocks some
+    // datacenter IPs with a 403 while the site itself works — routing the
+    // download through a clean IP gets past it. Blank = download direct.
+    getcomicsDownloadProxy: { type: 'string', allowEmpty: true },
   });
 
   // Settings UI (source toggle + fields, and a Test button target).
