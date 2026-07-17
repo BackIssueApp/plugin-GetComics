@@ -37,9 +37,11 @@ test('a /dls/ link is classified by its LABEL, not its URL path (the real-world 
   const html = `<article><div class="post-contents">
     <a href="https://getcomics.org/dls/AAA/">Mega Link</a>
     <a href="https://getcomics.org/dls/BBB/">Mediafire Link</a>
+    <a href="https://getcomics.org/dls/CCC/">TeraBox Link</a>
+    <a href="https://www.1024tera.com/sharing/link?surl=DDD">Mirror Download</a>
   </div></article>`;
   const links = parseDownloadLinks(html);
-  assert.deepEqual(links.map((l) => l.host).sort(), ['mediafire', 'mega']);
+  assert.deepEqual(links.map((l) => l.host).sort(), ['mediafire', 'mega', 'terabox', 'terabox']);
   assert.ok(!links.some((l) => l.host === 'main'), 'a /dls/ "Mega Link" is NOT main');
 });
 

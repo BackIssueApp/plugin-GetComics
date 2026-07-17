@@ -76,9 +76,17 @@ async function downloadArchive(candidate, session, onProgress) {
             saved = file;
           } catch { /* debug dump is best-effort */ }
           console.warn(`getcomics: ${detail} returned ${buffer.length} bytes of ${looksHtml ? 'HTML' : 'unknown data'} from ${url}${title ? ` — page title: "${title}"` : ''}${saved ? ` (saved to ${saved})` : ''}`);
-          throw new Error(looksHtml
-            ? `${detail} sent a web page instead of the file${title ? ` ("${title}")` : ''} — Cloudflare challenge or rate limit on the download host; a browser download works because it can pass the challenge`
-            : 'downloaded file is suspiciously small and not a comic archive');
+          // Say WHOSE page came back. A "Download Now" /dls/ button can
+          // redirect anywhere — some posts point it at TeraBox and the like,
+          // which need a browser/account and can't be fetched directly.
+          const cloudHost = /terabox|1024tera/i.test(head) ? 'TeraBox'
+            : /mediafire/i.test(head) ? 'Mediafire'
+              : /mega\.nz/i.test(head) ? 'MEGA' : null;
+          throw new Error(!looksHtml
+            ? 'downloaded file is suspiciously small and not a comic archive'
+            : cloudHost
+              ? `this post's ${detail} link redirects to ${cloudHost}, which BackIssue can't download from directly — try another release for this issue`
+              : `${detail} sent a web page instead of the file${title ? ` ("${title}")` : ''} — Cloudflare challenge or rate limit on the download host; a browser download works because it can pass the challenge`);
         }
       }
       return buffer;

@@ -42,6 +42,7 @@ function classifyHost(url, label) {
   if (/pixel\s*drain/i.test(t) || /pixeldrain\.(com|net)/i.test(url)) return 'pixeldrain';
   if (/\bmega\b/i.test(t) || /mega\.(nz|co\.nz)/i.test(url)) return 'mega';
   if (/mediafire/i.test(t) || /mediafire\.com/i.test(url)) return 'mediafire';
+  if (/tera\s*box/i.test(t) || /(?:terabox|1024tera|teraboxapp|teraboxlink|terasharelink)\.(?:com|app)/i.test(url)) return 'terabox';
   if (/^\s*(download\s*now|main\s*(server|download)|mirror\s*download|download\s*(here|link))\b/i.test(t)) return 'main';
   // Un-labelled getcomics DDL link → assume the direct server.
   if (/getcomics\.(org|info)\/(dls|dlds|links)\//i.test(url)) return 'main';
@@ -63,7 +64,7 @@ export function parseDownloadLinks(html) {
     const host = classifyHost(url, label);
     if (host) { links.push({ host, url, label }); seen.add(url); }
   });
-  const order = ['main', 'pixeldrain', 'mega', 'mediafire'];
+  const order = ['main', 'pixeldrain', 'mega', 'mediafire', 'terabox'];
   return links.sort((a, b) => order.indexOf(a.host) - order.indexOf(b.host));
 }
 

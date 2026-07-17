@@ -15,6 +15,11 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
   "sent a web page instead of the file"). `…/file/…` links are handled too.
 - The "sent a web page" diagnostic now logs **which URL** was fetched, so
   mirror problems can be pinned to the exact link.
+- **TeraBox links** are now recognized: a "Download Now" button that redirects
+  to TeraBox fails with a clear "redirects to TeraBox, which BackIssue can't
+  download from directly" error (instead of a misleading Cloudflare message),
+  and explicitly labelled TeraBox buttons are classified as an unsupported
+  host up front — the plugin moves on to a supported mirror when one exists.
 
 ## [1.2.0] — 2026-07-16
 
