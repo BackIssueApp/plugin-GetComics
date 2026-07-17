@@ -53,6 +53,20 @@ async function downloadArchive(candidate, session, onProgress) {
         referer: candidate.postUrl, session,
         proxyUrl: config.getcomicsDownloadProxy || '',
         onProgress: ({ done, total, bps }) => onProgress({ phase: 'download', unit: 'bytes', done, total, bps, detail }),
+      }).catch((e) => {
+        // "download HTTP 403" alone helps nobody — say which mirror refused
+        // and what to do about it. 403 on the main server is Cloudflare (or an
+        // IP block); 403 on PixelDrain is usually its free transfer limit.
+        const st = /download HTTP (\d{3})/.exec(e.message)?.[1];
+        if (st === '403' && link.host === 'main') {
+          const remedy = flareUrl() ? 'the download host is blocking this IP — try a download proxy in Settings → GetComics'
+            : 'set a FlareSolverr URL in Settings → GetComics to get past it';
+          throw new Error(`GetComics' download server refused the request (HTTP 403 — Cloudflare); ${remedy}`);
+        }
+        if (st && link.host === 'pixeldrain') {
+          throw new Error(`PixelDrain refused the download (HTTP ${st}${st === '403' ? ' — usually its free transfer limit; try again later' : ''})`);
+        }
+        throw new Error(`${detail} download failed (${e.message})`);
       });
       if (suspiciouslySmall(buffer.length)) {
         // Small can be legitimate (a short chapter) — but only when the BYTES

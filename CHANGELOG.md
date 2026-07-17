@@ -20,6 +20,10 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
   download from directly" error (instead of a misleading Cloudflare message),
   and explicitly labelled TeraBox buttons are classified as an unsupported
   host up front — the plugin moves on to a supported mirror when one exists.
+- A refused download ("download HTTP 403") now says **which mirror** refused
+  and what to do: a 403 from GetComics' server is Cloudflare — set a
+  FlareSolverr URL (or a download proxy) in Settings → GetComics; a 403 from
+  PixelDrain is usually its free transfer limit — try again later.
 
 ## [1.2.0] — 2026-07-16
 
