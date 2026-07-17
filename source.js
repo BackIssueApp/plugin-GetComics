@@ -61,10 +61,12 @@ async function downloadArchive(candidate, session, onProgress) {
         if (st === '403' && link.host === 'main') {
           const remedy = flareUrl() ? 'the download host is blocking this IP — try a download proxy in Settings → GetComics'
             : 'set a FlareSolverr URL in Settings → GetComics to get past it';
-          throw new Error(`GetComics' download server refused the request (HTTP 403 — Cloudflare); ${remedy}`);
+          // Nothing changes between retries (no config, no cookies) — retrying
+          // a Cloudflare 403 just burns requests. Same for a transfer cap.
+          throw Object.assign(new Error(`GetComics' download server refused the request (HTTP 403 — Cloudflare); ${remedy}`), { noRetry: true });
         }
         if (st && link.host === 'pixeldrain') {
-          throw new Error(`PixelDrain refused the download (HTTP ${st}${st === '403' ? ' — usually its free transfer limit; try again later' : ''})`);
+          throw Object.assign(new Error(`PixelDrain refused the download (HTTP ${st}${st === '403' ? ' — usually its free transfer limit; try again later' : ''})`), { noRetry: st === '403' });
         }
         throw new Error(`${detail} download failed (${e.message})`);
       });
@@ -96,17 +98,22 @@ async function downloadArchive(candidate, session, onProgress) {
           const cloudHost = /terabox|1024tera/i.test(head) ? 'TeraBox'
             : /mediafire/i.test(head) ? 'Mediafire'
               : /mega\.nz/i.test(head) ? 'MEGA' : null;
-          throw new Error(!looksHtml
+          throw Object.assign(new Error(!looksHtml
             ? 'downloaded file is suspiciously small and not a comic archive'
             : cloudHost
               ? `this post's ${detail} link redirects to ${cloudHost}, which BackIssue can't download from directly — try another release for this issue`
-              : `${detail} sent a web page instead of the file${title ? ` ("${title}")` : ''} — Cloudflare challenge or rate limit on the download host; a browser download works because it can pass the challenge`);
+              : `${detail} sent a web page instead of the file${title ? ` ("${title}")` : ''} — Cloudflare challenge or rate limit on the download host; a browser download works because it can pass the challenge`),
+          // A redirect to an unsupported cloud host won't change on retry.
+          cloudHost ? { noRetry: true } : {});
         }
       }
       return buffer;
     } catch (e) { lastErr = e; /* try the next mirror */ }
   }
-  throw new Error('getcomics download failed: ' + (lastErr?.message || 'all links failed'));
+  // Preserve noRetry: if the last mirror's failure can't be fixed by retrying
+  // (Cloudflare 403, transfer cap), retrying the whole download can't either.
+  throw Object.assign(new Error('getcomics download failed: ' + (lastErr?.message || 'all links failed')),
+    lastErr?.noRetry ? { noRetry: true } : {});
 }
 
 const siteUrl = () => (config.getcomicsUrl || 'https://getcomics.org').replace(/\/+$/, '');
