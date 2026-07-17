@@ -186,7 +186,16 @@ export const getcomics = {
     // GetComics serves CBZ/ZIP mostly, sometimes CBR — normalize to CBZ so it
     // can be tagged. Sniff by magic bytes, not extension.
     const fmt = sniffBuffer(buffer);
-    if (fmt === 'cbr') return { buffer: await cbrBufferToCbz(buffer), format: 'cbz' };
+    if (fmt === 'cbr') {
+      // Normalize to CBZ so it can be tagged. An oversized CBR (a big collected
+      // edition) can't be repacked in memory — hand the raw RAR to the core,
+      // which files it as a .cbr (the app reads CBR natively).
+      try { return { buffer: await cbrBufferToCbz(buffer), format: 'cbz' }; }
+      catch (e) {
+        if (!/too large to convert/i.test(String(e?.message))) throw e;
+        return { buffer, format: 'cbr' };
+      }
+    }
     if (fmt === 'cbz') return { buffer, format: 'cbz' };
     if (fmt === 'pdf') return { buffer, format: 'pdf' };
     throw new Error('unrecognized archive from getcomics');

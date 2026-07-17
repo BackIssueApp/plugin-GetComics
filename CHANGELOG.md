@@ -8,6 +8,12 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
 
 ## [Unreleased]
 
+### Fixed
+- A very large CBR (a collected edition too big to repack in memory) no longer
+  fails the whole download with "too large to convert safely" — it's handed to
+  the app as-is and filed as a `.cbr` (readable natively; it just isn't
+  ComicInfo-tagged).
+
 ## [1.2.1] — 2026-07-17
 
 ### Fixed
