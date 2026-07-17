@@ -39,7 +39,19 @@ async function downloadArchive(candidate, session, onProgress) {
         proxyUrl: config.getcomicsDownloadProxy || '',
         onProgress: ({ done, total, bps }) => onProgress({ phase: 'download', unit: 'bytes', done, total, bps, detail }),
       });
-      if (suspiciouslySmall(buffer.length)) throw new Error('downloaded file is suspiciously small');
+      if (suspiciouslySmall(buffer.length)) {
+        // Small can be legitimate (a short chapter) — but only when the BYTES
+        // are a real archive. A tiny HTML body is the download host serving a
+        // Cloudflare challenge / error page instead of the file: name that,
+        // so the queue error explains itself.
+        const kind = sniffBuffer(buffer);
+        if (!kind) {
+          const looksHtml = /<(!doctype|html)/i.test(buffer.toString('latin1', 0, 256));
+          throw new Error(looksHtml
+            ? `${detail} sent a web page instead of the file (Cloudflare challenge or rate limit on the download host — a browser download works because it can pass the challenge)`
+            : 'downloaded file is suspiciously small and not a comic archive');
+        }
+      }
       return buffer;
     } catch (e) { lastErr = e; /* try the next mirror */ }
   }

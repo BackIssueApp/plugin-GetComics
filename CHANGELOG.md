@@ -8,6 +8,13 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
 
 ## [Unreleased]
 
+### Fixed
+- Genuinely small comics (short chapters) download instead of being rejected
+  as "suspiciously small" — the guard now checks the bytes are a real archive.
+  When the download host serves a web page instead of the file (a Cloudflare
+  challenge or rate limit), the error says exactly that instead of the vague
+  size complaint.
+
 ## [1.1.0] — 2026-07-12
 
 ### Added
