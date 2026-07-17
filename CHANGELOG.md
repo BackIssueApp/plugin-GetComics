@@ -13,7 +13,8 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
   as "suspiciously small" — the guard now checks the bytes are a real archive.
   When the download host serves a web page instead of the file (a Cloudflare
   challenge or rate limit), the error says exactly that instead of the vague
-  size complaint.
+  size complaint — including the page title the host sent, with the full
+  response saved to `data/debug/getcomics-last-response.html` for inspection.
 
 ## [1.1.0] — 2026-07-12
 

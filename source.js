@@ -3,6 +3,8 @@
 // download link, streams the archive, and returns it as a CBZ buffer for the
 // core import tail to tag + file. No external download client — the fetch is
 // synchronous and in-app, like the batcave source.
+import fs from 'node:fs';
+import path from 'node:path';
 import config from '../../src/config.js';
 import { scoreRelease, suspiciouslySmall, manualTarget } from '../../src/sources/usenet.js';
 import { normalizeNumber } from '../../src/matcher.js';
@@ -46,9 +48,23 @@ async function downloadArchive(candidate, session, onProgress) {
         // so the queue error explains itself.
         const kind = sniffBuffer(buffer);
         if (!kind) {
-          const looksHtml = /<(!doctype|html)/i.test(buffer.toString('latin1', 0, 256));
+          const head = buffer.toString('latin1', 0, 512);
+          const looksHtml = /<(!doctype|html)/i.test(head);
+          // Keep the evidence: the LAST bad body is saved for inspection, and
+          // the page title (the host's own words — "Just a moment…",
+          // "Rate limited", a 404 …) goes in the log.
+          const title = (head.match(/<title[^>]*>([^<]{0,120})/i) || [])[1]?.trim();
+          let saved = '';
+          try {
+            const dir = path.join(config.dataDir, 'debug');
+            fs.mkdirSync(dir, { recursive: true });
+            const file = path.join(dir, looksHtml ? 'getcomics-last-response.html' : 'getcomics-last-response.bin');
+            fs.writeFileSync(file, buffer);
+            saved = file;
+          } catch { /* debug dump is best-effort */ }
+          console.warn(`getcomics: ${detail} returned ${buffer.length} bytes of ${looksHtml ? 'HTML' : 'unknown data'}${title ? ` — page title: "${title}"` : ''}${saved ? ` (saved to ${saved})` : ''}`);
           throw new Error(looksHtml
-            ? `${detail} sent a web page instead of the file (Cloudflare challenge or rate limit on the download host — a browser download works because it can pass the challenge)`
+            ? `${detail} sent a web page instead of the file${title ? ` ("${title}")` : ''} — Cloudflare challenge or rate limit on the download host; a browser download works because it can pass the challenge`
             : 'downloaded file is suspiciously small and not a comic archive');
         }
       }
