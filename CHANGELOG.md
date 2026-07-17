@@ -8,6 +8,8 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
 
 ## [Unreleased]
 
+## [1.2.2] — 2026-07-17
+
 ### Fixed
 - A very large CBR (a collected edition too big to repack in memory) no longer
   fails the whole download with "too large to convert safely" — it's handed to
