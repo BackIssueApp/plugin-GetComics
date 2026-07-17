@@ -10,7 +10,7 @@ import { scoreRelease, suspiciouslySmall, manualTarget } from '../../src/sources
 import { normalizeNumber } from '../../src/matcher.js';
 import { cbrBufferToCbz } from '../../src/archive.js';
 import { fetchHtml, downloadToBuffer } from './http.js';
-import { parseSearchResults, parseDownloadLinks, pixeldrainDirectUrl, sniffBuffer, isPackTitle, SUPPORTED_HOSTS } from './parse.js';
+import { parseSearchResults, parseDownloadLinks, pixeldrainDirectUrl, pixeldrainListId, sniffBuffer, isPackTitle, SUPPORTED_HOSTS } from './parse.js';
 import { extractPackToDir } from './pack.js';
 
 // Human label for the chosen host, shown in the queue.
@@ -33,7 +33,20 @@ async function downloadArchive(candidate, session, onProgress) {
   let lastErr = null;
   for (const link of links) {
     try {
-      const url = link.host === 'pixeldrain' ? pixeldrainDirectUrl(link.url) : link.url;
+      let url = link.host === 'pixeldrain' ? pixeldrainDirectUrl(link.url) : link.url;
+      // A PixelDrain LIST (album) link can't be fetched directly — ask the
+      // list API for its files and take the comic (or the largest file).
+      const listId = link.host === 'pixeldrain' ? pixeldrainListId(link.url) : null;
+      if (listId) {
+        const res = await fetch(`https://pixeldrain.com/api/list/${listId}`);
+        if (!res.ok) throw new Error(`pixeldrain list lookup failed (HTTP ${res.status})`);
+        const meta = await res.json();
+        const files = Array.isArray(meta?.files) ? meta.files : [];
+        const best = files.find((f) => /\.(cbz|cbr|pdf)$/i.test(f.name || ''))
+          || [...files].sort((a, b) => (b.size || 0) - (a.size || 0))[0];
+        if (!best?.id) throw new Error('pixeldrain list has no downloadable file');
+        url = `https://pixeldrain.com/api/file/${best.id}?download`;
+      }
       const detail = HOST_LABEL[link.host] || link.host;
       onProgress({ phase: 'download', unit: 'bytes', done: 0, total: candidate.size || 0, bps: 0, detail });
       const { buffer } = await downloadToBuffer(url, {
@@ -62,7 +75,7 @@ async function downloadArchive(candidate, session, onProgress) {
             fs.writeFileSync(file, buffer);
             saved = file;
           } catch { /* debug dump is best-effort */ }
-          console.warn(`getcomics: ${detail} returned ${buffer.length} bytes of ${looksHtml ? 'HTML' : 'unknown data'}${title ? ` — page title: "${title}"` : ''}${saved ? ` (saved to ${saved})` : ''}`);
+          console.warn(`getcomics: ${detail} returned ${buffer.length} bytes of ${looksHtml ? 'HTML' : 'unknown data'} from ${url}${title ? ` — page title: "${title}"` : ''}${saved ? ` (saved to ${saved})` : ''}`);
           throw new Error(looksHtml
             ? `${detail} sent a web page instead of the file${title ? ` ("${title}")` : ''} — Cloudflare challenge or rate limit on the download host; a browser download works because it can pass the challenge`
             : 'downloaded file is suspiciously small and not a comic archive');

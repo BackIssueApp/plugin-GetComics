@@ -72,8 +72,15 @@ export { SUPPORTED as SUPPORTED_HOSTS };
 // PixelDrain share links (pixeldrain.com/u/<id>) need the API file URL to get
 // the raw bytes; direct-file links pass through unchanged.
 export function pixeldrainDirectUrl(url) {
-  const m = /pixeldrain\.(?:com|net)\/(?:u|d)\/([A-Za-z0-9]+)/i.exec(url);
+  const m = /pixeldrain\.(?:com|net)\/(?:u|d|file)\/([A-Za-z0-9]+)/i.exec(url);
   return m ? `https://pixeldrain.com/api/file/${m[1]}?download` : url;
+}
+
+// PixelDrain LIST links (pixeldrain.com/l/<id>) hold one or more files behind
+// an album page — the id must be resolved via the list API to a file id, or
+// the download fetches the album's HTML viewer instead of any bytes.
+export function pixeldrainListId(url) {
+  return (/pixeldrain\.(?:com|net)\/l\/([A-Za-z0-9]+)/i.exec(url) || [])[1] || null;
 }
 
 // Heuristic: does this post title list an explicit multi-issue RANGE (e.g.

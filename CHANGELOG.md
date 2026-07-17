@@ -8,6 +8,14 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
 
 ## [Unreleased]
 
+### Fixed
+- PixelDrain **list/album links** (`pixeldrain.com/l/…`) now download correctly —
+  the plugin resolves the list via PixelDrain's API and fetches the comic file
+  inside it, instead of downloading the album's web page (which surfaced as
+  "sent a web page instead of the file"). `…/file/…` links are handled too.
+- The "sent a web page" diagnostic now logs **which URL** was fetched, so
+  mirror problems can be pinned to the exact link.
+
 ## [1.2.0] — 2026-07-16
 
 ### Fixed

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  parseSearchResults, parseDownloadLinks, pixeldrainDirectUrl,
+  parseSearchResults, parseDownloadLinks, pixeldrainDirectUrl, pixeldrainListId,
   sniffBuffer, extractYear, extractSizeBytes,
 } from '../parse.js';
 import { SEARCH_HTML, POST_HTML } from './fixtures.js';
@@ -52,8 +52,23 @@ test('SUPPORTED_HOSTS excludes mega/mediafire', async () => {
 test('pixeldrainDirectUrl maps a share link to the API file url', () => {
   assert.equal(pixeldrainDirectUrl('https://pixeldrain.com/u/abc123XY'),
     'https://pixeldrain.com/api/file/abc123XY?download');
+  // /d/ and /file/ variants map the same way.
+  assert.equal(pixeldrainDirectUrl('https://pixeldrain.com/d/abc123XY'),
+    'https://pixeldrain.com/api/file/abc123XY?download');
+  assert.equal(pixeldrainDirectUrl('https://pixeldrain.net/file/abc123XY'),
+    'https://pixeldrain.com/api/file/abc123XY?download');
   // A non-share url passes through.
   assert.equal(pixeldrainDirectUrl('https://example.com/x.cbz'), 'https://example.com/x.cbz');
+  // A LIST link is NOT a file link — it must pass through untouched so the
+  // download path can resolve it via the list API instead.
+  assert.equal(pixeldrainDirectUrl('https://pixeldrain.com/l/xyz789'), 'https://pixeldrain.com/l/xyz789');
+});
+
+test('pixeldrainListId extracts list ids and rejects file links', () => {
+  assert.equal(pixeldrainListId('https://pixeldrain.com/l/xyz789'), 'xyz789');
+  assert.equal(pixeldrainListId('https://pixeldrain.net/l/Abc12'), 'Abc12');
+  assert.equal(pixeldrainListId('https://pixeldrain.com/u/abc123XY'), null);
+  assert.equal(pixeldrainListId('https://example.com/l/nope'), null);
 });
 
 test('sniffBuffer identifies zip/rar/pdf by magic bytes', () => {
