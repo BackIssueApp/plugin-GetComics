@@ -4,31 +4,16 @@
 //      service that drives a real browser and returns cf_clearance cookies).
 //   2. Direct undici with realistic browser headers — works whenever Cloudflare
 //      isn't actively challenging; a detected challenge fails with a clear hint.
-// Downloads go direct (undici streaming), carrying any cookies obtained —
-// unless a download proxy is configured (see downloadDispatcher).
+// Downloads go direct (undici streaming), following redirects manually with
+// per-host cookies — see downloadToBuffer, which also solves a file host's own
+// Cloudflare gate via FlareSolverr when challenged.
 import { request, Agent, ProxyAgent, interceptors } from 'undici';
 
 // Redirect following moved out of request()'s options in undici v7+ (passing
 // maxRedirections now throws "use the redirect interceptor"). Compose it onto a
-// shared dispatcher instead. The DDL "Download Now" link redirects to the real
-// file, and PixelDrain/host links redirect too, so we need this on downloads.
+// shared dispatcher for HTML page fetches (downloads hop manually instead).
 const redirectDispatcher = new Agent().compose(interceptors.redirect({ maxRedirections: 5 }));
 
-// Some GetComics download hosts (the /dls/ redirector) block datacenter IPs
-// outright with a 403 — while the search/browse path is unaffected. An optional
-// egress proxy (e.g. a VPN container's HTTP proxy, http://gluetun:8888) routes
-// ONLY the file download out through a clean IP. One dispatcher per proxy URL,
-// cached; redirects still apply (the DDL link redirects to the real file).
-const proxyDispatchers = new Map();
-function downloadDispatcher(proxyUrl) {
-  if (!proxyUrl) return redirectDispatcher;
-  let d = proxyDispatchers.get(proxyUrl);
-  if (!d) {
-    d = new ProxyAgent(proxyUrl).compose(interceptors.redirect({ maxRedirections: 5 }));
-    proxyDispatchers.set(proxyUrl, d);
-  }
-  return d;
-}
 
 // A current, realistic desktop Firefox UA. When FlareSolverr solves a challenge
 // its cf_clearance cookie is bound to the UA it used, so we adopt whatever UA it
@@ -110,24 +95,74 @@ export async function fetchHtml(url, { flareUrl = '', session = {} } = {}) {
   return r.html;
 }
 
-// Stream a file to a Buffer (the DDL/PixelDrain hosts aren't CF-gated). Returns
-// { buffer, filename } — filename from content-disposition when present.
-// onProgress({ done, total, bps }) fires as bytes arrive (throttled), where
-// total is the content-length (0 if the server omits it) and bps is a smoothed
-// bytes/second.
-export async function downloadToBuffer(url, { referer = '', session = {}, maxBytes = 2 * 1024 * 1024 * 1024, onProgress = null, proxyUrl = '' } = {}) {
+// Plain (non-redirecting) dispatchers for downloads — the manual hop loop
+// below follows redirects itself. An optional egress proxy (e.g. a VPN
+// container's HTTP proxy, http://gluetun:8888) routes ONLY the file download
+// out through a clean IP; some download hosts block datacenter IPs with a 403
+// while the search/browse path is unaffected. One dispatcher per proxy URL.
+const plainAgent = new Agent();
+const plainProxyDispatchers = new Map();
+function plainDispatcher(proxyUrl) {
+  if (!proxyUrl) return plainAgent;
+  let d = plainProxyDispatchers.get(proxyUrl);
+  if (!d) { d = new ProxyAgent(proxyUrl); plainProxyDispatchers.set(proxyUrl, d); }
+  return d;
+}
+
+// Stream a file to a Buffer. Returns { buffer, filename } — filename from
+// content-disposition when present. onProgress({ done, total, bps }) fires as
+// bytes arrive (throttled), where total is the content-length (0 if the server
+// omits it) and bps is a smoothed bytes/second.
+//
+// Redirects are followed MANUALLY with per-host cookies: the /dls/ button
+// redirects to a file host on a DIFFERENT domain (e.g. fs2.comicfiles.ru)
+// with its own Cloudflare gate, and clearance cookies are domain-scoped — the
+// getcomics.org cookie means nothing there. When a hop answers with a CF
+// challenge and FlareSolverr is available, solve THAT host, remember its
+// cookies in session.hostCookies, and retry the hop once.
+export async function downloadToBuffer(url, { referer = '', session = {}, maxBytes = 2 * 1024 * 1024 * 1024, onProgress = null, proxyUrl = '', flareUrl = '' } = {}) {
   assertPublicUrl(url);
-  const res = await request(url, {
-    method: 'GET',
-    dispatcher: downloadDispatcher(proxyUrl),
-    headers: {
-      'user-agent': session.ua || DEFAULT_UA,
-      accept: '*/*',
-      ...(referer ? { referer } : {}),
-      ...(session.cookieHeader ? { cookie: session.cookieHeader } : {}),
-    },
-  });
-  if (res.statusCode >= 400) throw new Error('download HTTP ' + res.statusCode);
+  const hostCookies = session.hostCookies || (session.hostCookies = {});
+  if (session.cookieHeader) hostCookies[new URL(url).host] ||= session.cookieHeader;
+
+  let res = null;
+  const solved = new Set(); // one solve per host per download
+  for (let hop = 0; hop < 8; hop++) {
+    res = await request(url, {
+      method: 'GET',
+      dispatcher: plainDispatcher(proxyUrl),
+      headers: {
+        'user-agent': session.ua || DEFAULT_UA,
+        accept: '*/*',
+        ...(referer ? { referer } : {}),
+        ...(hostCookies[new URL(url).host] ? { cookie: hostCookies[new URL(url).host] } : {}),
+      },
+    });
+    const loc = res.headers.location;
+    if (res.statusCode >= 300 && res.statusCode < 400 && loc) {
+      await res.body.dump();
+      url = new URL(Array.isArray(loc) ? loc[0] : loc, url).href;
+      assertPublicUrl(url);
+      continue;
+    }
+    if (res.statusCode >= 400) {
+      const host = new URL(url).host;
+      const body = await res.body.text().catch(() => '');
+      if (flareUrl && !solved.has(host) && looksChallenged(body, 0)) {
+        // The FILE HOST is challenging (getcomics cookies don't apply there).
+        // Solve any page on that domain — CF intercepts before the origin —
+        // and retry this hop with the domain's own clearance cookie.
+        solved.add(host);
+        const r = await viaFlareSolverr(flareUrl, new URL(url).origin + '/');
+        hostCookies[host] = r.cookieHeader;
+        session.ua = r.ua; // clearance is bound to the solving browser's UA
+        continue;
+      }
+      throw new Error('download HTTP ' + res.statusCode);
+    }
+    break; // 2xx — stream it
+  }
+  if (!res || res.statusCode >= 300) throw new Error('download failed: too many redirects');
   const cd = res.headers['content-disposition'] || '';
   const m = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(Array.isArray(cd) ? cd[0] : cd);
   const filename = m ? decodeURIComponent(m[1].replace(/"/g, '').trim()) : null;

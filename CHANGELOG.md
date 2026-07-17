@@ -20,6 +20,13 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
   download from directly" error (instead of a misleading Cloudflare message),
   and explicitly labelled TeraBox buttons are classified as an unsupported
   host up front — the plugin moves on to a supported mirror when one exists.
+- **Downloads get past the file host's own Cloudflare gate.** The "Download
+  Now" button redirects to a file server on a *different domain* with its own
+  Cloudflare challenge — and clearance cookies don't cross domains, so
+  downloads could 403 even with FlareSolverr configured (while a browser,
+  which solves the second challenge invisibly, worked fine). Downloads now
+  follow redirects with per-host cookies and solve the file host through
+  FlareSolverr when it challenges, then retry.
 - A refused download ("download HTTP 403") now says **which mirror** refused
   and what to do: a 403 from GetComics' server is Cloudflare — set a
   FlareSolverr URL (or a download proxy) in Settings → GetComics; a 403 from
