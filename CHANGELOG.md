@@ -26,7 +26,9 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
   downloads could 403 even with FlareSolverr configured (while a browser,
   which solves the second challenge invisibly, worked fine). Downloads now
   follow redirects with per-host cookies and solve the file host through
-  FlareSolverr when it challenges, then retry.
+  FlareSolverr when it challenges, then retry. While that challenge solve runs
+  (it can take tens of seconds), the queue row shows a live "Solving
+  challenge…" / "Connecting…" phase instead of a frozen "Downloading · 0 B".
 - A refused download ("download HTTP 403") now says **which mirror** refused
   and what to do: a 403 from GetComics' server is Cloudflare — set a
   FlareSolverr URL (or a download proxy) in Settings → GetComics; a 403 from

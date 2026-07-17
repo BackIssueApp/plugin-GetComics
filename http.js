@@ -120,8 +120,9 @@ function plainDispatcher(proxyUrl) {
 // getcomics.org cookie means nothing there. When a hop answers with a CF
 // challenge and FlareSolverr is available, solve THAT host, remember its
 // cookies in session.hostCookies, and retry the hop once.
-export async function downloadToBuffer(url, { referer = '', session = {}, maxBytes = 2 * 1024 * 1024 * 1024, onProgress = null, proxyUrl = '', flareUrl = '' } = {}) {
+export async function downloadToBuffer(url, { referer = '', session = {}, maxBytes = 2 * 1024 * 1024 * 1024, onProgress = null, onStage = null, proxyUrl = '', flareUrl = '' } = {}) {
   assertPublicUrl(url);
+  const stage = (name, host) => { try { onStage?.(name, host); } catch { /* progress is best-effort */ } };
   const hostCookies = session.hostCookies || (session.hostCookies = {});
   if (session.cookieHeader) hostCookies[new URL(url).host] ||= session.cookieHeader;
 
@@ -151,8 +152,10 @@ export async function downloadToBuffer(url, { referer = '', session = {}, maxByt
       if (flareUrl && !solved.has(host) && looksChallenged(body, 0)) {
         // The FILE HOST is challenging (getcomics cookies don't apply there).
         // Solve any page on that domain — CF intercepts before the origin —
-        // and retry this hop with the domain's own clearance cookie.
+        // and retry this hop with the domain's own clearance cookie. This can
+        // take tens of seconds; announce it so the UI shows a live phase.
         solved.add(host);
+        stage('solving', host);
         const r = await viaFlareSolverr(flareUrl, new URL(url).origin + '/');
         hostCookies[host] = r.cookieHeader;
         session.ua = r.ua; // clearance is bound to the solving browser's UA

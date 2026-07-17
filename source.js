@@ -48,13 +48,17 @@ async function downloadArchive(candidate, session, onProgress) {
         url = `https://pixeldrain.com/api/file/${best.id}?download`;
       }
       const detail = HOST_LABEL[link.host] || link.host;
-      onProgress({ phase: 'download', unit: 'bytes', done: 0, total: candidate.size || 0, bps: 0, detail });
+      // Connecting/solving can take tens of seconds before the first byte —
+      // show an indeterminate phase, not a frozen "Downloading · 0 B".
+      onProgress({ phase: 'connecting', detail });
       const { buffer } = await downloadToBuffer(url, {
         referer: candidate.postUrl, session,
         proxyUrl: config.getcomicsDownloadProxy || '',
         // The file host may run its OWN Cloudflare gate on a different domain
         // than the site — downloadToBuffer solves it per-host when challenged.
         flareUrl: flareUrl(),
+        // The slow pre-stream stages report themselves so the queue row moves.
+        onStage: (name) => onProgress({ phase: name === 'solving' ? 'solving' : 'connecting', detail }),
         onProgress: ({ done, total, bps }) => onProgress({ phase: 'download', unit: 'bytes', done, total, bps, detail }),
       }).catch((e) => {
         // "download HTTP 403" alone helps nobody — say which mirror refused
