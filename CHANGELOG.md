@@ -8,6 +8,8 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-07-16
+
 ### Fixed
 - Genuinely small comics (short chapters) download instead of being rejected
   as "suspiciously small" — the guard now checks the bytes are a real archive.
