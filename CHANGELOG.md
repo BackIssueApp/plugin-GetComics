@@ -29,6 +29,16 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
   FlareSolverr when it challenges, then retry. While that challenge solve runs
   (it can take tens of seconds), the queue row shows a live "Solving
   challenge…" / "Connecting…" phase instead of a frozen "Downloading · 0 B".
+
+### Changed
+- **Cloudflare clearance is cached and reused across downloads.** A solve costs
+  ~20s of Cloudflare's own challenge timer, and the resulting cookie is good for
+  ~15 minutes — so the plugin now remembers each host's clearance and reuses it
+  instead of re-solving on every download. In testing, the second and later
+  downloads from the same file host dropped from ~21s of setup to ~1.5s. Page
+  fetches reuse the site's clearance the same way (direct fetch first, solve
+  only when the cookie has expired), so searches stop driving a browser solve
+  every time.
 - A refused download ("download HTTP 403") now says **which mirror** refused
   and what to do: a 403 from GetComics' server is Cloudflare — set a
   FlareSolverr URL (or a download proxy) in Settings → GetComics; a 403 from

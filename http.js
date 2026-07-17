@@ -44,6 +44,25 @@ function looksChallenged(html, status) {
   return /just a moment|challenge-platform|cf-browser-verification|_cf_chl/i.test(html || '');
 }
 
+// ---- Cloudflare clearance cache ------------------------------------------
+// A cf_clearance cookie stays valid for a while (typically 15-30 min), and a
+// fresh solve costs ~20s of Cloudflare's own challenge timer that we can't
+// shorten. So the real win is NOT re-solving: cache each host's clearance
+// (cookie + the UA it's bound to) and reuse it across downloads. Keyed by host;
+// { cookieHeader, ua, ts }. Cleared lazily on expiry or when a cookie stops
+// working (a challenge comes back despite it).
+const CLEARANCE_TTL_MS = 15 * 60 * 1000;
+const clearanceJar = new Map();
+function clearanceGet(host) {
+  const e = clearanceJar.get(host);
+  if (e && Date.now() - e.ts < CLEARANCE_TTL_MS) return e;
+  if (e) clearanceJar.delete(host);
+  return null;
+}
+function clearanceSet(host, cookieHeader, ua) {
+  if (cookieHeader) clearanceJar.set(host, { cookieHeader, ua, ts: Date.now() });
+}
+
 // Solve/fetch a CF-gated page via FlareSolverr. Returns { html, cookieHeader, ua }.
 async function viaFlareSolverr(flareUrl, url) {
   // FlareSolverr v3 lives at /v1 — tolerate the URL given with or without it (a
@@ -81,15 +100,32 @@ async function viaDirect(url, { cookieHeader = '', ua = DEFAULT_UA } = {}) {
 // cookies/UA between calls so one solve serves the whole find→fetch flow.
 export async function fetchHtml(url, { flareUrl = '', session = {} } = {}) {
   assertPublicUrl(url);
+  const host = new URL(url).host;
+
+  // If we hold a fresh clearance for this host, try it directly first — a
+  // valid cf_clearance cookie is honored even by undici (the browser's UA is
+  // reused), so a repeat page fetch skips the FlareSolverr round trip entirely.
+  const cached = clearanceGet(host);
+  if (cached) {
+    const r = await viaDirect(url, { cookieHeader: cached.cookieHeader, ua: cached.ua });
+    if (!looksChallenged(r.html, r.status)) {
+      session.cookieHeader = cached.cookieHeader;
+      session.ua = cached.ua;
+      return r.html;
+    }
+    clearanceJar.delete(host); // stale — solve again below
+  }
+
   if (flareUrl) {
     const r = await viaFlareSolverr(flareUrl, url);
     session.cookieHeader = r.cookieHeader;
     session.ua = r.ua;
+    clearanceSet(host, r.cookieHeader, r.ua);
     return r.html;
   }
   const r = await viaDirect(url, session);
   if (looksChallenged(r.html, r.status)) {
-    throw new Error('Cloudflare challenge on ' + new URL(url).host +
+    throw new Error('Cloudflare challenge on ' + host +
       ' — set a FlareSolverr URL in Settings → GetComics to get past it.');
   }
   return r.html;
@@ -129,6 +165,13 @@ export async function downloadToBuffer(url, { referer = '', session = {}, maxByt
   let res = null;
   const solved = new Set(); // one solve per host per download
   for (let hop = 0; hop < 8; hop++) {
+    const curHost = new URL(url).host;
+    // Reuse a cached clearance for this host — the previous download of a comic
+    // from the same file server already solved it, so skip the ~20s re-solve.
+    if (!hostCookies[curHost]) {
+      const c = clearanceGet(curHost);
+      if (c) { hostCookies[curHost] = c.cookieHeader; session.ua = session.ua || c.ua; }
+    }
     res = await request(url, {
       method: 'GET',
       dispatcher: plainDispatcher(proxyUrl),
@@ -136,7 +179,7 @@ export async function downloadToBuffer(url, { referer = '', session = {}, maxByt
         'user-agent': session.ua || DEFAULT_UA,
         accept: '*/*',
         ...(referer ? { referer } : {}),
-        ...(hostCookies[new URL(url).host] ? { cookie: hostCookies[new URL(url).host] } : {}),
+        ...(hostCookies[curHost] ? { cookie: hostCookies[curHost] } : {}),
       },
     });
     const loc = res.headers.location;
@@ -151,6 +194,8 @@ export async function downloadToBuffer(url, { referer = '', session = {}, maxByt
       const body = await res.body.text().catch(() => '');
       if (flareUrl && !solved.has(host) && looksChallenged(body, 0)) {
         // The FILE HOST is challenging (getcomics cookies don't apply there).
+        // A stale cached clearance can land us here — drop it and solve fresh.
+        clearanceJar.delete(host);
         // Solve any page on that domain — CF intercepts before the origin —
         // and retry this hop with the domain's own clearance cookie. This can
         // take tens of seconds; announce it so the UI shows a live phase.
@@ -159,6 +204,7 @@ export async function downloadToBuffer(url, { referer = '', session = {}, maxByt
         const r = await viaFlareSolverr(flareUrl, new URL(url).origin + '/');
         hostCookies[host] = r.cookieHeader;
         session.ua = r.ua; // clearance is bound to the solving browser's UA
+        clearanceSet(host, r.cookieHeader, r.ua); // reuse for the next download
         continue;
       }
       throw new Error('download HTTP ' + res.statusCode);
