@@ -8,6 +8,8 @@ by the maintainers when changes merge, so concurrent PRs don't conflict here.
 
 ## [Unreleased]
 
+## [1.2.1] — 2026-07-17
+
 ### Fixed
 - PixelDrain **list/album links** (`pixeldrain.com/l/…`) now download correctly —
   the plugin resolves the list via PixelDrain's API and fetches the comic file
